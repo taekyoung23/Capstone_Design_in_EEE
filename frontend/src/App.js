@@ -9,10 +9,12 @@ const subjects = [
   "정보보호론","확률변수"
 ];
 
-// 환경변수에서 백엔드 API URL 불러오기
+// 환경 변수에서 API 기본 URL을 가져옵니다.
 const API = process.env.REACT_APP_API_URL;
 
 function App() {
+  const [questionCount, setQuestionCount] = useState(null);
+  const [answeredCount, setAnsweredCount] = useState(0);
   const [selectedSubject, setSelectedSubject] = useState("");
   const [sessionId, setSessionId] = useState(null);
   const [selectedIdx, setSelectedIdx] = useState(null);
@@ -25,21 +27,22 @@ function App() {
   const [quizExhausted, setQuizExhausted] = useState(false);
   const [isSwapped, setIsSwapped] = useState(false);
 
+  // 과목 선택, 문제 요청
   const handleSubjectSelect = async (subject) => {
     setLoading(true);
     setError("");
     setQuizExhausted(false);
     try {
-      // 수정된 부분: 환경변수 기반 전체 경로 사용
       const res = await axios.post(
         `${API}/compare_models/`,
         { subject }
       );
+
       setSelectedSubject(subject);
       setSessionId(res.data.session_id);
       setSelectedIdx(res.data.idx);
 
-      // 👉 랜덤으로 섞기
+      // 모델 A/B 순서 랜덤 섞기
       const shouldSwap = Math.random() < 0.5;
       if (shouldSwap) {
         setModelA(res.data.model_b);
@@ -63,22 +66,22 @@ function App() {
     }
   };
 
+  // 문제 수 선택
+  const handleQuestionCountSelect = (count) => {
+    setQuestionCount(count);
+    setAnsweredCount(1);
+    handleSubjectSelect(selectedSubject);
+  };
+
+  // 모델 A/B 선택 저장
   const handleModelSelect = async (which) => {
     if (!sessionId || selectedIdx === null) return;
     setLoading(true);
     setError("");
     try {
-      // 진짜 모델 이름으로 전환
-      const realModel =
-        which === "A"
-          ? isSwapped
-            ? "model_b"
-            : "model_a"
-          : isSwapped
-          ? "model_a"
-          : "model_b";
-
-      // 수정된 부분: 전체 경로 사용
+      const realModel = which === "A"
+        ? (isSwapped ? "model_b" : "model_a")
+        : (isSwapped ? "model_a" : "model_b");
       await axios.post(
         `${API}/save_selection/`,
         {
@@ -97,12 +100,12 @@ function App() {
     }
   };
 
+  // 피드백 전송
   const handleFeedbackSubmit = async () => {
     if (!sessionId) return;
     setLoading(true);
     setError("");
     try {
-      // 수정된 부분: 전체 경로 사용
       await axios.post(
         `${API}/submit_feedback/`,
         {
@@ -125,11 +128,15 @@ function App() {
       {error && <p style={{ color: "red" }}>{error}</p>}
       {loading && <p>로딩중...</p>}
 
+      {/* 문제가 소진된 경우 */}
       {quizExhausted && (
         <section style={{ marginTop: 32 }}>
           <h2 style={{ color: "orange" }}>📛 문제가 소진되었습니다.</h2>
           <button
-            onClick={() => setSelectedSubject("")}
+            onClick={() => {
+              setSelectedSubject("");
+              setAnsweredCount(0);
+            }}
             style={{
               marginTop: 16,
               padding: "10px 20px",
@@ -145,6 +152,7 @@ function App() {
         </section>
       )}
 
+      {/* 과목 선택 화면 */}
       {!selectedSubject && !quizExhausted && (
         <section>
           <h2>🔍 과목을 선택하세요</h2>
@@ -152,7 +160,17 @@ function App() {
             {subjects.map((subj) => (
               <button
                 key={subj}
-                onClick={() => handleSubjectSelect(subj)}
+                onClick={() => {
+                  setSelectedSubject(subj);
+                  setQuestionCount(null);
+                  setAnsweredCount(0);
+                  setSelectedModel("");
+                  setModelA(null);
+                  setModelB(null);
+                  setSessionId(null);
+                  setSelectedIdx(null);
+                  setFeedback("");
+                }}
                 style={{
                   padding: "8px 16px",
                   margin: 4,
@@ -170,102 +188,62 @@ function App() {
         </section>
       )}
 
-      {/* Comparison Screen */}
+      {/* 문제 수 선택 */}
+      {selectedSubject && questionCount === null && (
+        <section style={{ marginTop: 32 }}>
+          <h2>🔢 문제 수 선택</h2>
+          <div style={{ display: "flex", gap: 8 }}>
+            {[5, 10].map((n) => (
+              <button
+                key={n}
+                onClick={() => handleQuestionCountSelect(n)}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#444",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 4,
+                  cursor: "pointer"
+                }}
+              >
+                {n}문제
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* 모델 비교 화면 */}
       {selectedSubject && modelA && modelB && !selectedModel && (
         <section style={{ marginTop: 24 }}>
           <button
             onClick={() => setSelectedSubject("")}
-            style={{
-              marginBottom: 12,
-              background: "transparent",
-              border: "none",
-              color: "#61dafb",
-              cursor: "pointer"
-            }}
+            style={{ marginBottom: 12, background: "transparent", border: "none", color: "#61dafb", cursor: "pointer" }}
           >
             ⬅️ 과목 선택으로 돌아가기
           </button>
-
           <div style={{ display: "flex", gap: 16 }}>
             {[{ label: "A", data: modelA }, { label: "B", data: modelB }].map(({ label, data }) => (
               <div
                 key={label}
-                style={{
-                  flex: 1,
-                  background: "#333",
-                  padding: 16,
-                  borderRadius: 6,
-                  position: "relative"
-                }}
+                style={{ flex: 1, background: "#333", padding: 16, borderRadius: 6, position: "relative" }}
               >
-                <div
-                  style={{
-                    position: "absolute",
-                    top: -10,
-                    left: 16,
-                    background: "#333",
-                    padding: "2px 8px",
-                    fontWeight: "bold",
-                    borderRadius: 4
-                  }}
-                >
+                <div style={{ position: "absolute", top: -10, left: 16, background: "#333", padding: "2px 8px", fontWeight: "bold", borderRadius: 4 }}>
                   Model {label}
                 </div>
-
-                {/* Question */}
-                <p style={{ color: "#ddd", margin: 0 }}>
-                  <MathTextRenderer text={data.question} />
-                </p>
-
-                {/* Choices */}
+                <p style={{ color: "#ddd", margin: 0 }}><MathTextRenderer text={data.question} /></p>
                 {data.choices.map((c, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      display: "flex",
-                      alignItems: "baseline",
-                      margin: 0,
-                      color: "#ccc",
-                      gap: "4px"
-                    }}
-                  >
-                    <span>{i + 1}.</span>
-                    <span style={{ display: "inline" }}>
-                      <MathTextRenderer text={c} />
-                    </span>
+                  <div key={i} style={{ display: "flex", alignItems: "baseline", color: "#ccc", gap: "4px" }}>
+                    <span>{i + 1}.</span><span><MathTextRenderer text={c} /></span>
                   </div>
                 ))}
-
-                <p style={{ color: "#66ff66", marginTop: 8 }}>
-                  <strong>정답:</strong> {data.answer}
-                </p>
-                <div
-                  style={{
-                    background: "#222",
-                    color: "#99ccff",
-                    padding: 8,
-                    marginTop: 4,
-                    borderRadius: 4,
-                    maxHeight: 100,
-                    overflowY: "auto",
-                    whiteSpace: "pre-wrap"
-                  }}
-                >
-                  <strong>해설:</strong>
-                  <MathTextRenderer text={data.explanation} />
+                <p style={{ color: "#66ff66", marginTop: 8 }}><strong>정답:</strong> {data.answer}</p>
+                <div style={{ background: "#222", color: "#99ccff", padding: 8, marginTop: 4, borderRadius: 4, maxHeight: 100, overflowY: "auto", whiteSpace: "pre-wrap" }}>
+                  <strong>해설:</strong><MathTextRenderer text={data.explanation} />
                 </div>
                 <button
                   onClick={() => handleModelSelect(label)}
-                  style={{
-                    marginTop: 12,
-                    width: "100%",
-                    padding: 10,
-                    background: "#4caf50",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: 4,
-                    cursor: "pointer"
-                  }}
+                  style={{ marginTop: 12, width: "100%", padding: 10, background: "#4caf50", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}
                 >
                   Select Model {label}
                 </button>
@@ -275,114 +253,60 @@ function App() {
         </section>
       )}
 
-      {/* Selected Model Screen */}
+      {/* 선택된 모델 화면 */}
       {selectedModel && (
         <section style={{ marginTop: 32 }}>
-          <div style={{ marginBottom: 12 }}>
-            <button
-              onClick={() => setSelectedModel("")}
-              style={{
-                marginRight: 12,
-                background: "transparent",
-                border: "none",
-                color: "#61dafb",
-                cursor: "pointer"
-              }}
-            >
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+            <button onClick={() => setSelectedModel("")} style={{ background: "transparent", border: "none", color: "#61dafb", cursor: "pointer" }}>
               ⬅️ 비교 화면으로 돌아가기
             </button>
             <button
-              onClick={() => setSelectedSubject("")}
-              style={{
-                background: "transparent",
-                border: "none",
-                color: "#61dafb",
-                cursor: "pointer"
+              onClick={() => {
+                setSelectedSubject("");
+                setQuestionCount(null);
+                setAnsweredCount(0);
+                setSelectedModel("");
+                setModelA(null);
+                setModelB(null);
+                setSessionId(null);
+                setSelectedIdx(null);
+                setFeedback("");
               }}
+              style={{ background: "transparent", border: "none", color: "#61dafb", cursor: "pointer" }}
             >
               🏠 과목 선택으로 돌아가기
             </button>
+            <span>✅ 비교 완료한 문제 수: {answeredCount}/{questionCount}</span>
           </div>
-
           <h2>✅ 선택된 모델: Model {selectedModel}</h2>
-          <p style={{ color: "#000", margin: 0 }}>
-            <MathTextRenderer text={selectedModel === "A" ? modelA.question : modelB.question} />
-          </p>
-
+          <p style={{ color: "#000", margin: 0 }}><MathTextRenderer text={selectedModel === "A" ? modelA.question : modelB.question} /></p>
           {(selectedModel === "A" ? modelA.choices : modelB.choices).map((c, i) => (
-            <div
-              key={i}
-              style={{
-                display: "flex",
-                alignItems: "baseline",
-                margin: 0,
-                color: "#000",
-                gap: "4px"
-              }}
-            >
-              <span>{i + 1}.</span>
-              <span style={{ display: "inline" }}>
-                <MathTextRenderer text={c} />
-              </span>
+            <div key={i} style={{ display: "flex", alignItems: "baseline", color: "#000", gap: "4px" }}>
+              <span>{i + 1}.</span><span><MathTextRenderer text={c} /></span>
             </div>
           ))}
-
-          <p style={{ color: "#66ff66", marginTop: 12 }}>
-            정답: {selectedModel === "A" ? modelA.answer : modelB.answer}
-          </p>
-          <p style={{ color: "#000" }}>
-            해설:{" "}
-            <MathTextRenderer text={selectedModel === "A" ? modelA.explanation : modelB.explanation} />
-          </p>
-
+          <p style={{ color: "#66ff66", marginTop: 12 }}><strong>정답:</strong> {selectedModel === "A" ? modelA.answer : modelB.answer}</p>
+          <p style={{ color: "#000" }}>해설: <MathTextRenderer text={selectedModel === "A" ? modelA.explanation : modelB.explanation} /></p>
           <textarea
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
             placeholder="추가 피드백을 입력하세요(예시: 답과 해설이 맞지 않음, 논리적으로 문제가 있음, 모델이 환각 증상을 보임, 보기의 변별력이 낮음)"
-            style={{
-              width: "100%",
-              height: 100,
-              marginTop: 12,
-              padding: 10,
-              borderRadius: 4,
-              border: "1px solid #555",
-              background: "#222",
-              color: "#fff"
-            }}
+            style={{ width: "100%", height: 100, marginTop: 12, padding: 10, borderRadius: 4, border: "1px solid #555", background: "#222", color: "#fff" }}
           />
-          <button
-            onClick={handleFeedbackSubmit}
-            style={{
-              marginTop: 12,
-              padding: "10px 20px",
-              background: "#4caf50",
-              color: "#fff",
-              border: "none",
-              borderRadius: 4,
-              cursor: "pointer"
-            }}
-          >
-            피드백 제출
-          </button>
+          <button onClick={handleFeedbackSubmit} style={{ marginTop: 12, padding: "10px 20px", background: "#4caf50", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>피드백 제출</button>
           <button
             onClick={() => {
+              if (answeredCount + 1 > questionCount) {
+                alert(`${questionCount}문제를 모두 확인하셨습니다!`);
+                return;
+              }
+              setAnsweredCount((prev) => prev + 1);
               setSelectedModel("");
               setFeedback("");
               handleSubjectSelect(selectedSubject);
             }}
-            style={{
-              marginTop: 12,
-              marginLeft: 12,
-              padding: "10px 20px",
-              background: "#2196f3",
-              color: "#fff",
-              border: "none",
-              borderRadius: 4,
-              cursor: "pointer"
-            }}
-          >
-            다음 문제 풀기
-          </button>
+            style={{ marginTop: 12, marginLeft: 12, padding: "10px 20px", background: "#2196f3", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}
+          >다음 문제 풀기</button>
         </section>
       )}
     </div>
