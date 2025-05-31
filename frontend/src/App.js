@@ -118,7 +118,7 @@ function App() {
     if (recaptchaRef.current) {
       recaptchaRef.current.reset();
     }
-    setRecaptchaToken("");
+    setTimeout(() => setRecaptchaToken(""), 100);
   };
 
   // ④ 문제 수 선택
@@ -212,7 +212,7 @@ function App() {
         <div style={{ marginBottom: 20 }}>
           <ReCAPTCHA
             ref={recaptchaRef}
-            sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
+            sitekey="6Lfe0FArAAAAAEHkBABER_UnPKtSczXTRAtV0Tkw"
             onChange={(token) => {
               setRecaptchaToken(token);
               setError("");
