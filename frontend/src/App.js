@@ -157,7 +157,15 @@ function App() {
     } catch (err) {
       console.error(err);
       if (err.response?.status === 429) {
-        setError("⚠️ 너무 많은 요청을 보냈습니다. 1분 후 다시 시도하세요.");
+        const remainRaw = err.response.headers["x-block-remaining"];
+
+        if (remainRaw === "600") {
+          // ✅ 블랙리스트에 올라간 경우 (10분 차단)
+          setError("⚠️ 과도한 요청으로 인해 10분 동안 차단되었습니다.");
+        } else {
+          // ✅ 일반적인 속도 제한 (20회/1분)
+          setError("⚠️ 너무 많은 요청을 보냈습니다. 1분 후 다시 시도하세요.");
+        }
       } else {
         setError("모델 선택 저장에 실패했습니다.");
       }
@@ -204,7 +212,7 @@ function App() {
         <div style={{ marginBottom: 20 }}>
           <ReCAPTCHA
             ref={recaptchaRef}
-            sitekey="6Lfe0FArAAAAAEHkBABER_UnPKtSczXTRAtV0Tkw"
+            sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
             onChange={(token) => {
               setRecaptchaToken(token);
               setError("");
